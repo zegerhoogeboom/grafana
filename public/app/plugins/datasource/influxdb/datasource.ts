@@ -80,7 +80,10 @@ export default class InfluxDatasource {
     scopedVars.timeFilter = { value: timeFilter };
 
     // replace templated variables
-    allQueries = this.templateSrv.replace(allQueries, scopedVars);
+    allQueries = this.templateSrv
+      .replace(allQueries, scopedVars)
+      .replace('$timeFrom', this.getInfluxTime(options.rangeRaw.from, false))
+      .replace('$timeTo', this.getInfluxTime(options.rangeRaw.to, true));
 
     return this._seriesQuery(allQueries).then((data): any => {
       if (!data || !data.results) {
@@ -133,6 +136,8 @@ export default class InfluxDatasource {
 
     var timeFilter = this.getTimeFilter({ rangeRaw: options.rangeRaw });
     var query = options.annotation.query.replace('$timeFilter', timeFilter);
+    query = query.replace('$timeFrom', this.getInfluxTime(options.rangeRaw.from, false));
+    query = query.replace('$timeTo', this.getInfluxTime(options.rangeRaw.to, true));
     query = this.templateSrv.replace(query, null, 'regex');
 
     return this._seriesQuery(query).then(data => {
