@@ -14,5 +14,5 @@ RUN yarn install --pure-lockfile
 COPY . .
 RUN go run build.go setup
 RUN go run build.go build
-
-CMD npm run build && ./bin/grafana-server
+RUN npm run dev
+CMD ./bin/grafana-server
