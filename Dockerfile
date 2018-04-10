@@ -11,9 +11,11 @@ RUN apt-get update \
   && npm install -g yarn
 RUN yarn install --pure-lockfile
 
+VOLUME ["/var/lib/grafana", "/var/log/grafana", "/etc/grafana"]
+EXPOSE 3000
+
 COPY . .
 RUN go run build.go setup
 RUN go run build.go build
 RUN npm run dev
-EXPOSE 3000
 CMD ./bin/grafana-server
