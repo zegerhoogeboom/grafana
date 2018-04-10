@@ -82,8 +82,8 @@ export default class InfluxDatasource {
     // replace templated variables
     allQueries = this.templateSrv
       .replace(allQueries, scopedVars)
-      .replace('$timeFrom', this.getInfluxTime(options.rangeRaw.from, false))
-      .replace('$timeTo', this.getInfluxTime(options.rangeRaw.to, true));
+      .replace(new RegExp('$timeFrom', 'g'), this.getInfluxTime(options.rangeRaw.from, false))
+      .replace(new RegExp('$timeTo', 'g'), this.getInfluxTime(options.rangeRaw.to, true));
 
     return this._seriesQuery(allQueries).then((data): any => {
       if (!data || !data.results) {

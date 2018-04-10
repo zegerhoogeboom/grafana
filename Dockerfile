@@ -15,4 +15,5 @@ COPY . .
 RUN go run build.go setup
 RUN go run build.go build
 RUN npm run dev
+EXPOSE 3000
 CMD ./bin/grafana-server
