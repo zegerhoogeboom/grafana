@@ -1,5 +1,9 @@
 FROM golang:1.10.1
 
+ARG GF_UID="472"
+ARG GF_GID="472"
+
+
 WORKDIR /go/src/github.com/grafana/grafana
 
 COPY package.json .
@@ -18,4 +22,13 @@ COPY . .
 RUN go run build.go setup
 RUN go run build.go build
 RUN npm run dev
-CMD ./bin/grafana-server
+
+ENV PATH=/go/src/github.com/grafana/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    GF_PATHS_CONFIG="/etc/grafana/grafana.ini" \
+    GF_PATHS_DATA="/var/lib/grafana" \
+    GF_PATHS_HOME="/usr/share/grafana" \
+    GF_PATHS_LOGS="/var/log/grafana" \
+    GF_PATHS_PLUGINS="/var/lib/grafana/plugins" \
+    GF_PATHS_PROVISIONING="/etc/grafana/provisioning"
+
+ENTRYPOINT [ "/run.sh" ]
