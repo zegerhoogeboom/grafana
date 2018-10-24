@@ -82,12 +82,13 @@ func (e *DashAlertExtractor) getAlertFromPanels(jsonWithPanels *simplejson.Json,
 		if collapsed && collapsedJSON.MustBool() {
 
 			// extract alerts from sub panels for collapsed panels
-			als, err := e.getAlertFromPanels(panel, validateAlertFunc)
+			alertSlice, err := e.getAlertFromPanels(panel,
+				validateAlertFunc)
 			if err != nil {
 				return nil, err
 			}
 
-			alerts = append(alerts, als...)
+			alerts = append(alerts, alertSlice...)
 			continue
 		}
 
@@ -104,7 +105,7 @@ func (e *DashAlertExtractor) getAlertFromPanels(jsonWithPanels *simplejson.Json,
 
 		// backward compatibility check, can be removed later
 		enabled, hasEnabled := jsonAlert.CheckGet("enabled")
-		if hasEnabled && enabled.MustBool() == false {
+		if hasEnabled && !enabled.MustBool() {
 			continue
 		}
 

@@ -1,8 +1,10 @@
 import $ from 'jquery';
 import _ from 'lodash';
 
+import config from 'app/core/config';
 import coreModule from 'app/core/core_module';
 import appEvents from 'app/core/app_events';
+import { getExploreUrl } from 'app/core/utils/explore';
 
 import Mousetrap from 'mousetrap';
 import 'mousetrap-global-bind';
@@ -13,7 +15,14 @@ export class KeybindingSrv {
   timepickerOpen = false;
 
   /** @ngInject */
-  constructor(private $rootScope, private $location) {
+  constructor(
+    private $rootScope,
+    private $location,
+    private $timeout,
+    private datasourceSrv,
+    private timeSrv,
+    private contextSrv
+  ) {
     // clear out all shortcuts on route change
     $rootScope.$on('$routeChangeSuccess', () => {
       Mousetrap.reset();
@@ -68,29 +77,39 @@ export class KeybindingSrv {
   }
 
   exit() {
-    var popups = $('.popover.in');
+    const popups = $('.popover.in');
     if (popups.length > 0) {
       return;
     }
 
     appEvents.emit('hide-modal');
 
-    if (!this.modalOpen) {
-      if (this.timepickerOpen) {
-        this.$rootScope.appEvent('closeTimepicker');
-        this.timepickerOpen = false;
-      } else {
-        this.$rootScope.appEvent('panel-change-view', { fullscreen: false, edit: false });
-      }
-    } else {
+    if (this.modalOpen) {
       this.modalOpen = false;
+      return;
+    }
+
+    if (this.timepickerOpen) {
+      this.$rootScope.appEvent('closeTimepicker');
+      this.timepickerOpen = false;
+      return;
     }
 
     // close settings view
-    var search = this.$location.search();
+    const search = this.$location.search();
     if (search.editview) {
       delete search.editview;
       this.$location.search(search);
+      return;
+    }
+
+    if (search.fullscreen) {
+      this.$rootScope.appEvent('panel-change-view', { fullscreen: false, edit: false });
+      return;
+    }
+
+    if (search.kiosk) {
+      this.$rootScope.appEvent('toggle-kiosk-mode', { exit: true });
     }
   }
 
@@ -121,7 +140,7 @@ export class KeybindingSrv {
   }
 
   showDashEditView() {
-    var search = _.extend(this.$location.search(), { editview: 'settings' });
+    const search = _.extend(this.$location.search(), { editview: 'settings' });
     this.$location.search(search);
   }
 
@@ -176,6 +195,20 @@ export class KeybindingSrv {
       }
     });
 
+    // jump to explore if permissions allow
+    if (this.contextSrv.isEditor && config.exploreEnabled) {
+      this.bind('x', async () => {
+        if (dashboard.meta.focusPanelId) {
+          const panel = dashboard.getPanelById(dashboard.meta.focusPanelId);
+          const datasource = await this.datasourceSrv.get(panel.datasource);
+          const url = await getExploreUrl(panel, panel.targets, datasource, this.datasourceSrv, this.timeSrv);
+          if (url) {
+            this.$timeout(() => this.$location.url(url));
+          }
+        }
+      });
+    }
+
     // delete panel
     this.bind('p r', () => {
       if (dashboard.meta.focusPanelId && dashboard.meta.canEdit) {
@@ -189,7 +222,7 @@ export class KeybindingSrv {
     // duplicate panel
     this.bind('p d', () => {
       if (dashboard.meta.focusPanelId && dashboard.meta.canEdit) {
-        let panelIndex = dashboard.getPanelInfoById(dashboard.meta.focusPanelId).index;
+        const panelIndex = dashboard.getPanelInfoById(dashboard.meta.focusPanelId).index;
         dashboard.duplicatePanel(dashboard.panels[panelIndex]);
       }
     });
@@ -197,8 +230,8 @@ export class KeybindingSrv {
     // share panel
     this.bind('p s', () => {
       if (dashboard.meta.focusPanelId) {
-        var shareScope = scope.$new();
-        var panelInfo = dashboard.getPanelInfoById(dashboard.meta.focusPanelId);
+        const shareScope = scope.$new();
+        const panelInfo = dashboard.getPanelInfoById(dashboard.meta.focusPanelId);
         shareScope.panel = panelInfo.panel;
         shareScope.dashboard = dashboard;
 
@@ -237,6 +270,12 @@ export class KeybindingSrv {
 
     this.bind('d v', () => {
       appEvents.emit('toggle-view-mode');
+    });
+
+    //Autofit panels
+    this.bind('d a', () => {
+      // this has to be a full page reload
+      window.location.href = window.location.href + '&autofitpanels';
     });
   }
 }

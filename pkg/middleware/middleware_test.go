@@ -9,7 +9,6 @@ import (
 
 	ms "github.com/go-macaron/session"
 	"github.com/grafana/grafana/pkg/bus"
-	l "github.com/grafana/grafana/pkg/login"
 	m "github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/session"
 	"github.com/grafana/grafana/pkg/setting"
@@ -72,7 +71,7 @@ func TestMiddlewareContext(t *testing.T) {
 				return nil
 			})
 
-			bus.AddHandler("test", func(loginUserQuery *l.LoginUserQuery) error {
+			bus.AddHandler("test", func(loginUserQuery *m.LoginUserQuery) error {
 				return nil
 			})
 
@@ -83,7 +82,7 @@ func TestMiddlewareContext(t *testing.T) {
 
 			setting.BasicAuthEnabled = true
 			authHeader := util.GetBasicAuthHeader("myUser", "myPass")
-			sc.fakeReq("GET", "/").withAuthoriziationHeader(authHeader).exec()
+			sc.fakeReq("GET", "/").withAuthorizationHeader(authHeader).exec()
 
 			Convey("Should init middleware context with user", func() {
 				So(sc.context.IsSignedIn, ShouldEqual, true)
@@ -126,6 +125,28 @@ func TestMiddlewareContext(t *testing.T) {
 			Convey("Should return api key invalid", func() {
 				So(sc.resp.Code, ShouldEqual, 401)
 				So(sc.respJson["message"], ShouldEqual, "Invalid API key")
+			})
+		})
+
+		middlewareScenario("Valid api key via Basic auth", func(sc *scenarioContext) {
+			keyhash := util.EncodePassword("v5nAwpMafFP6znaS4urhdWDLS5511M42", "asd")
+
+			bus.AddHandler("test", func(query *m.GetApiKeyByNameQuery) error {
+				query.Result = &m.ApiKey{OrgId: 12, Role: m.ROLE_EDITOR, Key: keyhash}
+				return nil
+			})
+
+			authHeader := util.GetBasicAuthHeader("api_key", "eyJrIjoidjVuQXdwTWFmRlA2em5hUzR1cmhkV0RMUzU1MTFNNDIiLCJuIjoiYXNkIiwiaWQiOjF9")
+			sc.fakeReq("GET", "/").withAuthorizationHeader(authHeader).exec()
+
+			Convey("Should return 200", func() {
+				So(sc.resp.Code, ShouldEqual, 200)
+			})
+
+			Convey("Should init middleware context", func() {
+				So(sc.context.IsSignedIn, ShouldEqual, true)
+				So(sc.context.OrgId, ShouldEqual, 12)
+				So(sc.context.OrgRole, ShouldEqual, m.ROLE_EDITOR)
 			})
 		})
 
@@ -177,9 +198,15 @@ func TestMiddlewareContext(t *testing.T) {
 			setting.AuthProxyEnabled = true
 			setting.AuthProxyHeaderName = "X-WEBAUTH-USER"
 			setting.AuthProxyHeaderProperty = "username"
+			setting.LdapEnabled = false
 
 			bus.AddHandler("test", func(query *m.GetSignedInUserQuery) error {
 				query.Result = &m.SignedInUser{OrgId: 2, UserId: 12}
+				return nil
+			})
+
+			bus.AddHandler("test", func(cmd *m.UpsertUserCommand) error {
+				cmd.Result = &m.User{Id: 12}
 				return nil
 			})
 
@@ -199,18 +226,18 @@ func TestMiddlewareContext(t *testing.T) {
 			setting.AuthProxyHeaderName = "X-WEBAUTH-USER"
 			setting.AuthProxyHeaderProperty = "username"
 			setting.AuthProxyAutoSignUp = true
+			setting.LdapEnabled = false
 
 			bus.AddHandler("test", func(query *m.GetSignedInUserQuery) error {
 				if query.UserId > 0 {
 					query.Result = &m.SignedInUser{OrgId: 4, UserId: 33}
 					return nil
-				} else {
-					return m.ErrUserNotFound
 				}
+				return m.ErrUserNotFound
 			})
 
-			bus.AddHandler("test", func(cmd *m.CreateUserCommand) error {
-				cmd.Result = m.User{Id: 33}
+			bus.AddHandler("test", func(cmd *m.UpsertUserCommand) error {
+				cmd.Result = &m.User{Id: 33}
 				return nil
 			})
 
@@ -271,6 +298,11 @@ func TestMiddlewareContext(t *testing.T) {
 				return nil
 			})
 
+			bus.AddHandler("test", func(cmd *m.UpsertUserCommand) error {
+				cmd.Result = &m.User{Id: 33}
+				return nil
+			})
+
 			sc.fakeReq("GET", "/")
 			sc.req.Header.Add("X-WEBAUTH-USER", "torkelo")
 			sc.req.RemoteAddr = "[2001::23]:12345"
@@ -288,6 +320,11 @@ func TestMiddlewareContext(t *testing.T) {
 			setting.AuthProxyHeaderName = "X-WEBAUTH-USER"
 			setting.AuthProxyHeaderProperty = "username"
 			setting.AuthProxyWhitelist = ""
+
+			bus.AddHandler("test", func(query *m.UpsertUserCommand) error {
+				query.Result = &m.User{Id: 32}
+				return nil
+			})
 
 			bus.AddHandler("test", func(query *m.GetSignedInUserQuery) error {
 				query.Result = &m.SignedInUser{OrgId: 4, UserId: 32}
@@ -319,10 +356,16 @@ func TestMiddlewareContext(t *testing.T) {
 			setting.LdapEnabled = true
 
 			called := false
-			syncGrafanaUserWithLdapUser = func(ctx *m.ReqContext, query *m.GetSignedInUserQuery) error {
+			syncGrafanaUserWithLdapUser = func(query *m.LoginUserQuery) error {
 				called = true
+				query.User = &m.User{Id: 32}
 				return nil
 			}
+
+			bus.AddHandler("test", func(query *m.UpsertUserCommand) error {
+				query.Result = &m.User{Id: 32}
+				return nil
+			})
 
 			bus.AddHandler("test", func(query *m.GetSignedInUserQuery) error {
 				query.Result = &m.SignedInUser{OrgId: 4, UserId: 32}
@@ -392,12 +435,7 @@ func (sc *scenarioContext) withValidApiKey() *scenarioContext {
 	return sc
 }
 
-func (sc *scenarioContext) withInvalidApiKey() *scenarioContext {
-	sc.apiKey = "nvalidhhhhds"
-	return sc
-}
-
-func (sc *scenarioContext) withAuthoriziationHeader(authHeader string) *scenarioContext {
+func (sc *scenarioContext) withAuthorizationHeader(authHeader string) *scenarioContext {
 	sc.authHeader = authHeader
 	return sc
 }

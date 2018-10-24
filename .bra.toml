@@ -1,7 +1,7 @@
 [run]
 init_cmds = [
   ["npm", "run", "build"],
-  ["go", "build", "-o", "./bin/grafana-server", "./pkg/cmd/grafana-server"],
+  ["go", "run", "build.go", "-dev", "build-server"],
 	["./bin/grafana-server", "cfg:app_mode=development"]
 ]
 watch_all = true
@@ -11,10 +11,10 @@ watch_dirs = [
 	"$WORKDIR/public/app",
 	"$WORKDIR/conf",
 ]
-watch_exts = [".go", ".ini", ".toml", ".ts"]
+watch_exts = [".go", ".ini", ".toml", ".template.html", ".ts"]
 build_delay = 1500
 cmds = [
   ["npm", "run", "build"],
-  ["go", "build", "-o", "./bin/grafana-server", "./pkg/cmd/grafana-server"],
+  ["go", "run", "build.go", "-dev", "build-server"],
 	["./bin/grafana-server", "cfg:app_mode=development"]
 ]
